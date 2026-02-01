@@ -1,10 +1,10 @@
 import os
 import ssl
 import smtplib
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from dotenv import load_dotenv
@@ -25,7 +25,10 @@ EMAIL_TO = os.environ.get("EMAIL_TO")
 
 MIN_OFFER_AMOUNT_USD = 200_000_000
 US_EXCHANGES = {"NASDAQ", "NYSE", "AMEX"}
-DUBAI_TZ = ZoneInfo("Asia/Dubai")
+try:
+    DUBAI_TZ = ZoneInfo("Asia/Dubai")
+except ZoneInfoNotFoundError:
+    DUBAI_TZ = timezone(timedelta(hours=4))
 
 # ------------------------------------------------------------------
 # TIME
