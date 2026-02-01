@@ -162,8 +162,10 @@ def build_email(ipos: list[dict], date_iso: str, stats: dict) -> str:
     ]
 
     for ipo in ipos:
+        symbol = ipo.get("symbol") or "UNKNOWN"
+        name = ipo.get("name") or "Unknown"
         lines.append(
-            f"- {ipo['symbol']} | {ipo['name']} | "
+            f"- {symbol} | {name} | "
             f"USD {ipo['_offer_amount_usd']:,.0f}"
         )
 
