@@ -204,7 +204,7 @@ def run():
     send_email(subject, body)
     print(subject)
     for i in large_ipos:
-        print(i["symbol"])
+        print(i.get("symbol") or "UNKNOWN")
 
 if __name__ == "__main__":
     run()
