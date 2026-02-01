@@ -1,10 +1,12 @@
 import os
 import ssl
 import smtplib
-import requests
-from datetime import datetime, timezone, timedelta
-from email.mime.text import MIMEText
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from zoneinfo import ZoneInfo
+
+import requests
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -22,15 +24,14 @@ EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD")
 EMAIL_TO = os.environ.get("EMAIL_TO")
 
 MIN_OFFER_AMOUNT_USD = 200_000_000
-DUBAI_TZ_OFFSET = timedelta(hours=4)
+US_EXCHANGES = {"NASDAQ", "NYSE", "AMEX"}
+DUBAI_TZ = ZoneInfo("Asia/Dubai")
 
 # ------------------------------------------------------------------
 # TIME
 # ------------------------------------------------------------------
 def today_dubai_iso() -> str:
-    now_utc = datetime.now(timezone.utc)
-    dubai_now = now_utc + DUBAI_TZ_OFFSET
-    return dubai_now.strftime("%Y-%m-%d")
+    return datetime.now(DUBAI_TZ).strftime("%Y-%m-%d")
 
 # ------------------------------------------------------------------
 # DATA FETCH
@@ -51,7 +52,7 @@ def fetch_same_day_ipos(date_iso: str) -> list[dict]:
 # ------------------------------------------------------------------
 # BUSINESS LOGIC
 # ------------------------------------------------------------------
-def parse_price(price_field: str) -> float | None:
+def parse_price(price_field: str | None) -> float | None:
     """
     Finnhub price is often '20-22'
     We conservatively take the max.
@@ -59,11 +60,20 @@ def parse_price(price_field: str) -> float | None:
     if not price_field:
         return None
 
+    price_field = price_field.strip().replace("$", "").replace(",", "")
     if "-" in price_field:
-        low, high = price_field.split("-")
-        return float(high.strip())
+        parts = [p.strip() for p in price_field.split("-") if p.strip()]
+        if not parts:
+            return None
+        try:
+            return float(parts[-1])
+        except ValueError:
+            return None
 
-    return float(price_field)
+    try:
+        return float(price_field)
+    except ValueError:
+        return None
 
 def offer_amount_usd(ipo: dict) -> float | None:
     price = parse_price(ipo.get("price"))
@@ -72,22 +82,42 @@ def offer_amount_usd(ipo: dict) -> float | None:
     if price is None or shares is None:
         return None
 
-    return price * float(shares)
+    try:
+        shares_value = float(str(shares).replace(",", "").strip())
+    except (ValueError, TypeError):
+        return None
+    if shares_value <= 0:
+        return None
 
-def filter_large_us_ipos(ipos: list[dict]) -> list[dict]:
-    results = []
+    return price * shares_value
+
+def analyze_ipos(ipos: list[dict]) -> tuple[list[dict], dict]:
+    stats = {
+        "total_ipos": 0,
+        "us_ipos": 0,
+        "missing_data": 0,
+        "qualified": 0,
+    }
+    qualified = []
 
     for ipo in ipos:
+        stats["total_ipos"] += 1
         exchange = (ipo.get("exchange") or "").upper()
-        if exchange not in {"NASDAQ", "NYSE", "AMEX"}:
+        if exchange not in US_EXCHANGES:
             continue
 
+        stats["us_ipos"] += 1
         amt = offer_amount_usd(ipo)
-        if amt and amt >= MIN_OFFER_AMOUNT_USD:
-            ipo["_offer_amount_usd"] = amt
-            results.append(ipo)
+        if amt is None:
+            stats["missing_data"] += 1
+            continue
 
-    return results
+        if amt >= MIN_OFFER_AMOUNT_USD:
+            ipo["_offer_amount_usd"] = amt
+            qualified.append(ipo)
+            stats["qualified"] += 1
+
+    return qualified, stats
 
 # ------------------------------------------------------------------
 # EMAIL
@@ -142,33 +172,26 @@ def build_email(ipos: list[dict], date_iso: str, stats: dict) -> str:
 # ------------------------------------------------------------------
 # ENTRY POINT
 # ------------------------------------------------------------------
-def run():
+def require_env() -> None:
+    missing = []
     if not FINNHUB_API_KEY:
-        raise RuntimeError("FINNHUB_API_KEY is missing")
-    if not EMAIL_USER or not EMAIL_APP_PASSWORD or not EMAIL_TO:
-        raise RuntimeError("EMAIL_USER/EMAIL_APP_PASSWORD/EMAIL_TO are missing")
+        missing.append("FINNHUB_API_KEY")
+    if not EMAIL_USER:
+        missing.append("EMAIL_USER")
+    if not EMAIL_APP_PASSWORD:
+        missing.append("EMAIL_APP_PASSWORD")
+    if not EMAIL_TO:
+        missing.append("EMAIL_TO")
+    if missing:
+        raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
+
+def run():
+    require_env()
 
     date_iso = today_dubai_iso()
 
     ipos = fetch_same_day_ipos(date_iso)
-
-    us_ipos = []
-    missing_data = 0
-    for ipo in ipos:
-        exchange = (ipo.get("exchange") or "").upper()
-        if exchange not in {"NASDAQ", "NYSE", "AMEX"}:
-            continue
-        us_ipos.append(ipo)
-        if offer_amount_usd(ipo) is None:
-            missing_data += 1
-
-    large_ipos = filter_large_us_ipos(ipos)
-    stats = {
-        "total_ipos": len(ipos),
-        "us_ipos": len(us_ipos),
-        "missing_data": missing_data,
-        "qualified": len(large_ipos),
-    }
+    large_ipos, stats = analyze_ipos(ipos)
 
     body = build_email(large_ipos, date_iso, stats)
     subject = f"IPO Monitor {date_iso} - {len(large_ipos)} qualifying IPO(s)"

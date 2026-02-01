@@ -1,6 +1,6 @@
 # Daily IPO Monitor
 
-I built this small automation to check the U.S. IPO calendar each morning (Dubai time) and email myself the tickers that meet a size threshold. It pulls same-day IPOs from Finnhub, filters U.S. exchanges, calculates offer amount (price x shares), and sends a summary email.
+This automation checks the U.S. IPO calendar each morning (Dubai time) and emails the tickers that meet a size threshold. It pulls same-day IPOs from Finnhub, filters U.S. exchanges, calculates offer amount (price x shares), and sends a summary email.
 
 ## What it checks
 - Same-day IPOs only (Dubai date)
