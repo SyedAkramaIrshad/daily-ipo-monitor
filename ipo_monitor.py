@@ -126,7 +126,8 @@ def analyze_ipos(ipos: list[dict]) -> tuple[list[dict], dict]:
 # EMAIL
 # ------------------------------------------------------------------
 def send_email(subject: str, body_text: str, body_html: str) -> None:
-    msg = MIMEMultipart()
+    # Use "alternative" so clients render HTML and hide the plain text part.
+    msg = MIMEMultipart("alternative")
     msg["From"] = EMAIL_USER
     msg["To"] = EMAIL_TO
     msg["Subject"] = subject
