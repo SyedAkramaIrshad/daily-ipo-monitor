@@ -2,8 +2,8 @@ name: Daily IPO Monitor
 
 on:
   schedule:
-    # 09:00 Dubai time (UTC+4) = 05:00 UTC
-    - cron: "0 5 * * *"
+    # TEMP: run every 5 minutes to verify schedule triggers (UTC)
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
