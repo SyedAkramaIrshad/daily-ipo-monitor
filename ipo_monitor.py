@@ -125,12 +125,13 @@ def analyze_ipos(ipos: list[dict]) -> tuple[list[dict], dict]:
 # ------------------------------------------------------------------
 # EMAIL
 # ------------------------------------------------------------------
-def send_email(subject: str, body: str) -> None:
+def send_email(subject: str, body_text: str, body_html: str) -> None:
     msg = MIMEMultipart()
     msg["From"] = EMAIL_USER
     msg["To"] = EMAIL_TO
     msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
+    msg.attach(MIMEText(body_text, "plain"))
+    msg.attach(MIMEText(body_html, "html"))
 
     context = ssl.create_default_context()
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
@@ -138,7 +139,7 @@ def send_email(subject: str, body: str) -> None:
         server.login(EMAIL_USER, EMAIL_APP_PASSWORD)
         server.sendmail(EMAIL_USER, EMAIL_TO, msg.as_string())
 
-def build_email(ipos: list[dict], date_iso: str, stats: dict) -> str:
+def build_email(ipos: list[dict], date_iso: str, stats: dict) -> tuple[str, str]:
     summary_lines = [
         f"Date (Dubai): {date_iso}",
         f"Total IPOs returned: {stats['total_ipos']}",
@@ -149,7 +150,7 @@ def build_email(ipos: list[dict], date_iso: str, stats: dict) -> str:
     ]
 
     if not ipos:
-        return "\n".join(
+        text_body = "\n".join(
             [
                 f"No U.S. same-day IPOs with offer amount above "
                 f"USD {MIN_OFFER_AMOUNT_USD:,}.",
@@ -157,6 +158,16 @@ def build_email(ipos: list[dict], date_iso: str, stats: dict) -> str:
             ]
             + summary_lines
         )
+        html_body = "\n".join(
+            [
+                "<p><strong>No U.S. same-day IPOs with offer amount above "
+                f"USD {MIN_OFFER_AMOUNT_USD:,}.</strong></p>",
+                "<ul>",
+                *[f"<li>{line}</li>" for line in summary_lines if line],
+                "</ul>",
+            ]
+        )
+        return text_body, html_body
 
     lines = [
         f"U.S. Same-Day IPOs on {date_iso} (> USD 200M)",
@@ -167,12 +178,58 @@ def build_email(ipos: list[dict], date_iso: str, stats: dict) -> str:
     for ipo in ipos:
         symbol = ipo.get("symbol") or "UNKNOWN"
         name = ipo.get("name") or "Unknown"
+        exchange = ipo.get("exchange") or "Unknown"
+        price = ipo.get("price") or "N/A"
+        shares = ipo.get("numberOfShares") or "N/A"
+        offer_amt = ipo.get("_offer_amount_usd")
+        offer_amt_str = f"USD {offer_amt:,.0f}" if offer_amt is not None else "N/A"
         lines.append(
-            f"- {symbol} | {name} | "
-            f"USD {ipo['_offer_amount_usd']:,.0f}"
+            f"- {symbol} | {name} | {exchange} | Price: {price} | "
+            f"Shares: {shares} | Offer: {offer_amt_str}"
         )
 
-    return "\n".join(lines)
+    text_body = "\n".join(lines)
+
+    rows = []
+    for ipo in ipos:
+        symbol = ipo.get("symbol") or "UNKNOWN"
+        name = ipo.get("name") or "Unknown"
+        exchange = ipo.get("exchange") or "Unknown"
+        price = ipo.get("price") or "N/A"
+        shares = ipo.get("numberOfShares") or "N/A"
+        offer_amt = ipo.get("_offer_amount_usd")
+        offer_amt_str = f"USD {offer_amt:,.0f}" if offer_amt is not None else "N/A"
+        rows.append(
+            "<tr>"
+            f"<td>{symbol}</td>"
+            f"<td>{name}</td>"
+            f"<td>{exchange}</td>"
+            f"<td>{price}</td>"
+            f"<td>{shares}</td>"
+            f"<td>{offer_amt_str}</td>"
+            "</tr>"
+        )
+
+    html_body = "\n".join(
+        [
+            f"<h3>U.S. Same-Day IPOs on {date_iso}</h3>",
+            "<p><strong>Offer amounts shown below (some may be below USD "
+            f"{MIN_OFFER_AMOUNT_USD:,}).</strong></p>",
+            "<ul>",
+            *[f"<li>{line}</li>" for line in summary_lines if line],
+            "</ul>",
+            "<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\">",
+            "<thead><tr>"
+            "<th>Symbol</th><th>Company</th><th>Exchange</th>"
+            "<th>Price</th><th>Shares</th><th>Offer Amount</th>"
+            "</tr></thead>",
+            "<tbody>",
+            *rows,
+            "</tbody></table>",
+        ]
+    )
+
+    return text_body, html_body
 
 # ------------------------------------------------------------------
 # ENTRY POINT
@@ -198,10 +255,18 @@ def run():
     ipos = fetch_same_day_ipos(date_iso)
     large_ipos, stats = analyze_ipos(ipos)
 
-    body = build_email(large_ipos, date_iso, stats)
+    # Include all U.S. IPOs with computed offer amounts for reporting.
+    us_ipos = []
+    for ipo in ipos:
+        exchange = (ipo.get("exchange") or "").upper()
+        if exchange in US_EXCHANGES:
+            ipo["_offer_amount_usd"] = offer_amount_usd(ipo)
+            us_ipos.append(ipo)
+
+    body_text, body_html = build_email(us_ipos, date_iso, stats)
     subject = f"IPO Monitor {date_iso} - {len(large_ipos)} qualifying IPO(s)"
 
-    send_email(subject, body)
+    send_email(subject, body_text, body_html)
     print(subject)
     for i in large_ipos:
         print(i.get("symbol") or "UNKNOWN")
