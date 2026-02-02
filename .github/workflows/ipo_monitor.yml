@@ -4,10 +4,6 @@ on:
   schedule:
     # TEMP: run every 5 minutes to verify schedule triggers (UTC)
     - cron: "*/5 * * * *"
-  # TEMP: allow push-triggered runs for verification
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
