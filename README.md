@@ -1,6 +1,6 @@
 # Daily IPO Monitor
 
-This automation checks the U.S. IPO calendar each morning (Dubai time) and emails the tickers that meet a size threshold. It pulls same-day IPOs from Finnhub, filters U.S. exchanges, calculates offer amount (price x shares), and sends a summary email.
+This automation checks the U.S. IPO calendar each morning (Dubai time) and emails a summary of same-day U.S. IPOs. It pulls same-day IPOs from Finnhub, filters U.S. exchanges, calculates offer amount (price x shares), and highlights those above a size threshold in the subject line.
 
 ## What it checks
 - Same-day IPOs only (Dubai date)
@@ -8,7 +8,7 @@ This automation checks the U.S. IPO calendar each morning (Dubai time) and email
 - Offer amount >= USD 200M
 
 ## Schedule
-Runs every day at 9:00 AM Dubai time via GitHub Actions. GitHub schedules are UTC, so the cron is set to 05:00 UTC.
+Runs every day at 9:00 AM Dubai time via GitHub Actions. GitHub schedules are UTC, so the cron is set to 05:00 UTC (`0 5 * * *`).
 
 ## Setup (GitHub Actions)
 1) Create a Finnhub API key.
