@@ -1,6 +1,6 @@
 # Daily IPO Monitor
 
-This automation checks the U.S. IPO calendar each morning (Dubai time) and emails a summary of same-day U.S. IPOs. It pulls same-day IPOs from Finnhub, filters U.S. exchanges, calculates offer amount (price x shares), and highlights those above a size threshold in the subject line.
+This automation checks the U.S. IPO calendar each morning (Dubai time) and emails only the same-day U.S. IPOs that meet a size threshold. It pulls same-day IPOs from Finnhub, filters U.S. exchanges, calculates offer amount (price x shares), and sends a summary email.
 
 ## What it checks
 - Same-day IPOs only (Dubai date)

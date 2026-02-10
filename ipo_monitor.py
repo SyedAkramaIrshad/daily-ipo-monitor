@@ -171,7 +171,7 @@ def build_email(ipos: list[dict], date_iso: str, stats: dict) -> tuple[str, str]
         return text_body, html_body
 
     lines = [
-        f"U.S. Same-Day IPOs on {date_iso} (> USD 200M)",
+        f"U.S. Same-Day IPOs on {date_iso} (>= USD {MIN_OFFER_AMOUNT_USD:,})",
         "",
         *summary_lines
     ]
@@ -214,8 +214,7 @@ def build_email(ipos: list[dict], date_iso: str, stats: dict) -> tuple[str, str]
     html_body = "\n".join(
         [
             f"<h3>U.S. Same-Day IPOs on {date_iso}</h3>",
-            "<p><strong>Offer amounts shown below (some may be below USD "
-            f"{MIN_OFFER_AMOUNT_USD:,}).</strong></p>",
+            "<p><strong>All entries below meet the minimum offer amount threshold.</strong></p>",
             "<ul>",
             *[f"<li>{line}</li>" for line in summary_lines if line],
             "</ul>",
@@ -257,14 +256,7 @@ def run():
     large_ipos, stats = analyze_ipos(ipos)
 
     # Include all U.S. IPOs with computed offer amounts for reporting.
-    us_ipos = []
-    for ipo in ipos:
-        exchange = (ipo.get("exchange") or "").upper()
-        if exchange in US_EXCHANGES:
-            ipo["_offer_amount_usd"] = offer_amount_usd(ipo)
-            us_ipos.append(ipo)
-
-    body_text, body_html = build_email(us_ipos, date_iso, stats)
+    body_text, body_html = build_email(large_ipos, date_iso, stats)
     subject = f"IPO Monitor {date_iso} - {len(large_ipos)} qualifying IPO(s)"
 
     send_email(subject, body_text, body_html)
